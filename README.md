@@ -1,13 +1,14 @@
 # VisionPilot Docker Reproduction
 
 <p align="center">
-  <a href="./output/openlane_2x2_grid.mp4">
+  <a href="https://youtu.be/XA46OzToAPA">
     <img src="./output/openlane_2x2_grid.jpg" alt="VisionPilot OpenLane 2x2 reproduction showcase" width="100%">
   </a>
 </p>
 
 <p align="center">
-  <b>Click the image above to watch the 2x2 OpenLane reproduction video.</b>
+  <b>Watch the 2x2 OpenLane reproduction video on YouTube:</b><br>
+  <a href="https://youtu.be/XA46OzToAPA">https://youtu.be/XA46OzToAPA</a>
 </p>
 
 This repository is my Docker-based reproduction of the Autoware Foundation
