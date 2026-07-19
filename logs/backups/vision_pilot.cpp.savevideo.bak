@@ -1,6 +1,5 @@
 // VisionPilot — preprocess → inference → fusion → display
 #include <chrono>
-#include <cstdlib>
 #include <memory>
 #include <string>
 #include <thread>
@@ -15,7 +14,6 @@
 #include <models/inference.hpp>
 #include <planning/planning.hpp>
 #include <visualization/visualization.hpp>
-#include <opencv2/videoio.hpp>
 #include <debug/debug_draw.hpp>
 
 #include "camera_interface/v4l2_camera_interface.hpp"
@@ -103,14 +101,6 @@ int main(int argc, char** argv)
     // ── Initialize display ────────────────────────────────────────────────────
     visualization::Visualization visualization({cfg.webrtc_on, cfg.webrtc_port});
 
-    const char* output_video_env = std::getenv("VISIONPILOT_OUTPUT_VIDEO");
-    const std::string output_video = output_video_env ? output_video_env : "";
-    cv::VideoWriter output_writer;
-    if (!output_video.empty())
-    {
-        VP_INFO("[Video] Saving output to %s", output_video.c_str());
-    }
-
     const cv::Size net_size(vm::AutoDrive::NET_W, vm::AutoDrive::NET_H);
     cv::Mat frame, warped, resized;
     bool h_resized_set = false;
@@ -174,7 +164,7 @@ int main(int argc, char** argv)
                 plan.steering.empty() ? 0.0 : plan.steering[0],
                 plan.acceleration);
 
-            if (cfg.visualization_on || !output_video.empty())
+            if (cfg.visualization_on)
             {
                 if (debug_viz)
                     vd::visualize(resized, *r, source_label(cfg.source), cfg.wheel_dir, pipeline.H_world2resized());
@@ -186,25 +176,6 @@ int main(int argc, char** argv)
         {
             visualization.render_frame(display_frame);
         }
-        if (!output_video.empty())
-        {
-            if (!output_writer.isOpened())
-            {
-                output_writer.open(output_video, cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 30.0, display_frame.size());
-                if (!output_writer.isOpened())
-                {
-                    VP_ERROR("Cannot open output video: %s", output_video.c_str());
-                    return 1;
-                }
-            }
-            output_writer.write(display_frame);
-        }
-    }
-
-    if (output_writer.isOpened())
-    {
-        output_writer.release();
-        VP_INFO("[Video] Saved output to %s", output_video.c_str());
     }
 
     visualization.stop();

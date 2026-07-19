@@ -3,9 +3,9 @@
 source.video_realtime      = true
 source.video_loop          = false
 
-source.input_video         = /data/input.mp4
-source.input_vehicle_speed = /data/frame_speed.txt
+source.input_video         = <INPUT_VIDEO_FILE_PATH>
+source.input_vehicle_speed = <INPUT_VEHICLE_SPEED_FILE_PATH>
 # zod, open_lane
 source.dataset             = open_lane
-engine.provider = cuda
+engine.provider = gpu
 source.mode = video

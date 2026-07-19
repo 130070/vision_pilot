@@ -4,7 +4,7 @@
 #
 #
 # Usage:
-#   ./run.sh [--gpu|--cpu] [--ros2] [--v4l2 <host_device>[:<container_device>]] [--data <host_dir>[:<container_dir>]] [--output-video <host_mp4>] [--no-display] [--no-xhost]
+#   ./run.sh [--gpu|--cpu] [--ros2] [--v4l2 <host_device>[:<container_device>]] [--data <host_dir>[:<container_dir>]] [--no-display] [--no-xhost]
 #
 # Examples:
 #   ./run.sh                                  # GPU build, no test data/display
@@ -27,7 +27,6 @@ TAG=""
 DATA_DIR=""
 NO_DISPLAY=""
 NO_XHOST=""
-OUTPUT_VIDEO=""
 
 usage() {
     awk '/^#!/{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"
@@ -60,11 +59,6 @@ while [ $# -gt 0 ]; do
         --data)
             [ $# -ge 2 ] || { echo "Error: --data requires a value" >&2; exit 1; }
             DATA_DIR="$2"
-            shift 2
-            ;;
-        --output-video)
-            [ $# -ge 2 ] || { echo "Error: --output-video requires a value" >&2; exit 1; }
-            OUTPUT_VIDEO="$2"
             shift 2
             ;;
         --no-display)
@@ -141,17 +135,6 @@ if [ -n "$DATA_DIR" ]; then
     DOCKER_ARGS+=(-v "${DATA_HOST_PATH}:${DATA_CONTAINER_PATH}:ro")
 fi
 
-if [ -n "$OUTPUT_VIDEO" ]; then
-    OUTPUT_HOST_DIR="$(dirname "$OUTPUT_VIDEO")"
-    OUTPUT_HOST_BASE="$(basename "$OUTPUT_VIDEO")"
-    mkdir -p "$OUTPUT_HOST_DIR"
-    OUTPUT_HOST_DIR="$(cd "$OUTPUT_HOST_DIR" && pwd)"
-    OUTPUT_HOST_PATH="${OUTPUT_HOST_DIR}/${OUTPUT_HOST_BASE}"
-    OUTPUT_CONTAINER_PATH="/output/${OUTPUT_HOST_BASE}"
-    DOCKER_ARGS+=(-v "${OUTPUT_HOST_DIR}:/output:rw")
-    DOCKER_ARGS+=(-e "VISIONPILOT_OUTPUT_VIDEO=${OUTPUT_CONTAINER_PATH}")
-fi
-
 # Allow to modify config outside the container
 DOCKER_ARGS+=(-v "$(cd ../config && pwd)/vision_pilot.conf:/usr/share/visionpilot/config/vision_pilot.conf:ro")
 DOCKER_ARGS+=(-v "$(cd ../config && pwd)/vision_pilot_test.conf:/usr/share/visionpilot/config/vision_pilot_test.conf:ro")
@@ -185,8 +168,6 @@ if [ -z "$NO_DISPLAY" ]; then
         echo "if you don't need the visualization window at all."
         xhost +local:docker >/dev/null 2>&1 || true
     fi
-else
-    DOCKER_ARGS+=(-e "QT_QPA_PLATFORM=offscreen")
 fi
 
 echo "=================================================="
@@ -201,9 +182,6 @@ if [ -n "$DATA_DIR" ]; then
     else
         echo " Data mount:   $DATA_HOST_PATH -> $DATA_CONTAINER_PATH"
     fi
-fi
-if [ -n "$OUTPUT_VIDEO" ]; then
-    echo " Output video: $OUTPUT_HOST_PATH -> $OUTPUT_CONTAINER_PATH"
 fi
 echo "=================================================="
 

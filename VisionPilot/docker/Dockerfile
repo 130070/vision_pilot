@@ -8,12 +8,14 @@
 # syntax=docker/dockerfile:1
 ARG CUDA_TAG=13.0.0-devel-ubuntu24.04
 ARG ONNXRUNTIME_VERSION=1.26.0
+ARG ONNXRUNTIME_URL=
 ARG ENABLE_ROS2=OFF
 
 
 # build
 FROM nvcr.io/nvidia/cuda:${CUDA_TAG} AS builder
 ARG ONNXRUNTIME_VERSION
+ARG ONNXRUNTIME_URL
 ARG ENABLE_ROS2
 ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-c"]
@@ -53,7 +55,11 @@ RUN hdr_dir="$(dirname "$(find /usr/include -name IpIpoptApplication.hpp | head 
     && [ -n "$hdr_dir" ] \
     && ln -sf "$hdr_dir" /usr/include/coin-or
 
-RUN pip3 install --no-cache-dir --break-system-packages opencv-python numpy
+RUN pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple \
+        --trusted-host pypi.tuna.tsinghua.edu.cn \
+        --timeout 120 --retries 10 \
+        --no-cache-dir --break-system-packages \
+        opencv-python numpy
 
 # ROS2 Jazzy — only installed when ENABLE_ROS2=ON.
 RUN if [ "$ENABLE_ROS2" = "ON" ]; then \
@@ -82,11 +88,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt
+COPY docker/ort.tgz /opt/ort.tgz
 RUN mkdir -p /usr/share/visionpilot /opt/ort_extract \
-    && wget -q -O ort.tgz "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-gpu_cuda13-${ONNXRUNTIME_VERSION}.tgz" \
-    && tar -xzf ort.tgz -C /opt/ort_extract \
+    && test -s /opt/ort.tgz \
+    && tar -xzf /opt/ort.tgz -C /opt/ort_extract \
     && mv /opt/ort_extract/*/ /usr/share/visionpilot/onnxruntime \
-    && rm -rf ort.tgz /opt/ort_extract
+    && rm -rf /opt/ort.tgz /opt/ort_extract
 
 WORKDIR /opt/visionpilot
 COPY . .

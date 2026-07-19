@@ -8,7 +8,7 @@ source.v4l2_device      = /dev/video0
 source.v4l2_fps         = 10
 
 # ─── ONNX models ───────────────────────────────────────────────────────────────
-engine.provider     = cuda
+engine.provider     = gpu
 engine.device_id    = 0
 engine.cache_dir    = /tmp/visionpilot_trt_cache
 engine.workspace_gb = 1.0
@@ -22,7 +22,7 @@ Lf               = 2.67    # Front axle to CoG (m). Wheelbase L = Lf + Lr
 
 # ─── GUI ───────────────────────────────────────────────────────────────────────
 # Enable/Disable visualization
-visualization_on = false
+visualization_on = true
 
 # Enable/Disable webrtc
 webrtc_on = false
