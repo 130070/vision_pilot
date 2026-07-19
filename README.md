@@ -125,21 +125,27 @@ Required version:
 ONNX Runtime GPU 1.26.0
 ```
 
-Download URL:
+Recommended download from this repository release:
+
+```text
+https://github.com/130070/vision_pilot/releases/download/v1.1/onnxruntime-linux-x64-gpu-1.26.0.tgz
+```
+
+Alternative official download:
 
 ```text
 https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-linux-x64-gpu-1.26.0.tgz
 ```
 
-On the server, you can download it with:
+On the server, download the release asset and save it as `ort.tgz`:
 
 ```bash
 cd VisionPilot/docker
-wget -O ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-linux-x64-gpu-1.26.0.tgz
+wget -O ort.tgz https://github.com/130070/vision_pilot/releases/download/v1.1/onnxruntime-linux-x64-gpu-1.26.0.tgz
 ```
 
 If GitHub downloads are slow on the server, download the file on another machine
-and copy it to the server:
+and copy it to the server as `ort.tgz`:
 
 ```powershell
 scp "D:\path\to\onnxruntime-linux-x64-gpu-1.26.0.tgz" user@server:~/vision_pilot/VisionPilot/docker/ort.tgz
