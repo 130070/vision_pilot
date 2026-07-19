@@ -155,6 +155,7 @@ fi
 # Allow to modify config outside the container
 DOCKER_ARGS+=(-v "$(cd ../config && pwd)/vision_pilot.conf:/usr/share/visionpilot/config/vision_pilot.conf:ro")
 DOCKER_ARGS+=(-v "$(cd ../config && pwd)/vision_pilot_test.conf:/usr/share/visionpilot/config/vision_pilot_test.conf:ro")
+DOCKER_ARGS+=(-v "$(cd ../config && pwd)/H.yaml:/usr/share/visionpilot/config/H.yaml:ro")
 if [ "$ENABLE_ROS2" = "ON" ]; then
     DOCKER_ARGS+=(-v "$(cd ../config && pwd)/vision_pilot_ros2.conf:/usr/share/visionpilot/config/vision_pilot_ros2.conf:ro")
 fi
