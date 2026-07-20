@@ -1,6 +1,7 @@
 // VisionPilot — preprocess → inference → fusion → display
 #include <chrono>
 #include <cstdlib>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <thread>
@@ -111,6 +112,27 @@ int main(int argc, char** argv)
         VP_INFO("[Video] Saving output to %s", output_video.c_str());
     }
 
+    const char* output_csv_env = std::getenv("VISIONPILOT_OUTPUT_CSV");
+    const std::string output_csv = output_csv_env ? output_csv_env : "";
+    std::ofstream csv_writer;
+    if (!output_csv.empty())
+    {
+        csv_writer.open(output_csv);
+        if (!csv_writer)
+        {
+            VP_ERROR("Cannot open output CSV: %s", output_csv.c_str());
+            return 1;
+        }
+        VP_INFO("[CSV] Saving telemetry to %s", output_csv.c_str());
+        csv_writer
+            << "frame_id,ego_speed_ms,cte_m,raw_cte_m,yaw_rad,curvature,"
+            << "has_cipo,cipo_distance_m,cipo_velocity_ms,steering_rad,acceleration_ms2,"
+            << "pre_ms,autodrive_ms,autosteer_ms,autospeed_ms,parallel_wall_ms,"
+            << "path_valid,path_inliers,path_points,"
+            << "autodrive_valid,autodrive_flag_prob,autodrive_dist_normalized,autodrive_curvature_raw,"
+            << "autospeed_valid,autospeed_detections\n";
+    }
+
     const cv::Size net_size(vm::AutoDrive::NET_W, vm::AutoDrive::NET_H);
     cv::Mat frame, warped, resized;
     bool h_resized_set = false;
@@ -170,8 +192,39 @@ int main(int argc, char** argv)
                 cipo_dist,
                 r->cipo.velocity_ms);
 
+            const double steering_rad = plan.steering.empty() ? 0.0 : plan.steering[0];
+            if (csv_writer.is_open())
+            {
+                csv_writer
+                    << r->frame_id << ','
+                    << ego_v << ','
+                    << cte << ','
+                    << raw_cte << ','
+                    << epsi << ','
+                    << kappa << ','
+                    << (has_cipo ? 1 : 0) << ','
+                    << cipo_dist << ','
+                    << r->cipo.velocity_ms << ','
+                    << steering_rad << ','
+                    << plan.acceleration << ','
+                    << r->pre_ms << ','
+                    << r->ad_ms << ','
+                    << r->as_ms << ','
+                    << r->asp_ms << ','
+                    << r->wall_ms << ','
+                    << (r->lateral.path_valid ? 1 : 0) << ','
+                    << r->lateral.path_inliers << ','
+                    << r->lateral.path_points << ','
+                    << (r->auto_drive.valid ? 1 : 0) << ','
+                    << r->auto_drive.flag_prob << ','
+                    << r->auto_drive.dist_normalized << ','
+                    << r->auto_drive.curvature_raw << ','
+                    << (r->auto_speed.valid ? 1 : 0) << ','
+                    << r->auto_speed.detections.size() << '\n';
+            }
+
             vehicle_interface->write(
-                plan.steering.empty() ? 0.0 : plan.steering[0],
+                steering_rad,
                 plan.acceleration);
 
             if (cfg.visualization_on || !output_video.empty())
@@ -205,6 +258,11 @@ int main(int argc, char** argv)
     {
         output_writer.release();
         VP_INFO("[Video] Saved output to %s", output_video.c_str());
+    }
+    if (csv_writer.is_open())
+    {
+        csv_writer.close();
+        VP_INFO("[CSV] Saved telemetry to %s", output_csv.c_str());
     }
 
     visualization.stop();

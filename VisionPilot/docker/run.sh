@@ -4,7 +4,7 @@
 #
 #
 # Usage:
-#   ./run.sh [--gpu|--cpu] [--ros2] [--v4l2 <host_device>[:<container_device>]] [--data <host_dir>[:<container_dir>]] [--output-video <host_mp4>] [--no-display] [--no-xhost]
+#   ./run.sh [--gpu|--cpu] [--ros2] [--v4l2 <host_device>[:<container_device>]] [--data <host_dir>[:<container_dir>]] [--output-video <host_mp4>] [--output-csv <host_csv>] [--no-display] [--no-xhost]
 #
 # Examples:
 #   ./run.sh                                  # GPU build, no test data/display
@@ -28,6 +28,7 @@ DATA_DIR=""
 NO_DISPLAY=""
 NO_XHOST=""
 OUTPUT_VIDEO=""
+OUTPUT_CSV=""
 
 usage() {
     awk '/^#!/{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"
@@ -65,6 +66,11 @@ while [ $# -gt 0 ]; do
         --output-video)
             [ $# -ge 2 ] || { echo "Error: --output-video requires a value" >&2; exit 1; }
             OUTPUT_VIDEO="$2"
+            shift 2
+            ;;
+        --output-csv)
+            [ $# -ge 2 ] || { echo "Error: --output-csv requires a value" >&2; exit 1; }
+            OUTPUT_CSV="$2"
             shift 2
             ;;
         --no-display)
@@ -141,21 +147,53 @@ if [ -n "$DATA_DIR" ]; then
     DOCKER_ARGS+=(-v "${DATA_HOST_PATH}:${DATA_CONTAINER_PATH}:ro")
 fi
 
+OUTPUT_HOST_DIR=""
+OUTPUT_HOST_PATH=""
+OUTPUT_CONTAINER_PATH=""
+OUTPUT_CSV_HOST_PATH=""
+OUTPUT_CSV_CONTAINER_PATH=""
+
+set_output_mount_dir() {
+    local requested_dir="$1"
+    mkdir -p "$requested_dir"
+    requested_dir="$(cd "$requested_dir" && pwd)"
+    if [ -n "$OUTPUT_HOST_DIR" ] && [ "$OUTPUT_HOST_DIR" != "$requested_dir" ]; then
+        echo "Error: --output-video and --output-csv must use the same host directory." >&2
+        echo "       video dir: $OUTPUT_HOST_DIR" >&2
+        echo "       csv dir:   $requested_dir" >&2
+        exit 1
+    fi
+    OUTPUT_HOST_DIR="$requested_dir"
+}
+
 if [ -n "$OUTPUT_VIDEO" ]; then
-    OUTPUT_HOST_DIR="$(dirname "$OUTPUT_VIDEO")"
     OUTPUT_HOST_BASE="$(basename "$OUTPUT_VIDEO")"
-    mkdir -p "$OUTPUT_HOST_DIR"
-    OUTPUT_HOST_DIR="$(cd "$OUTPUT_HOST_DIR" && pwd)"
+    set_output_mount_dir "$(dirname "$OUTPUT_VIDEO")"
     OUTPUT_HOST_PATH="${OUTPUT_HOST_DIR}/${OUTPUT_HOST_BASE}"
     OUTPUT_CONTAINER_PATH="/output/${OUTPUT_HOST_BASE}"
-    DOCKER_ARGS+=(-v "${OUTPUT_HOST_DIR}:/output:rw")
     DOCKER_ARGS+=(-e "VISIONPILOT_OUTPUT_VIDEO=${OUTPUT_CONTAINER_PATH}")
+fi
+
+if [ -n "$OUTPUT_CSV" ]; then
+    OUTPUT_CSV_HOST_BASE="$(basename "$OUTPUT_CSV")"
+    set_output_mount_dir "$(dirname "$OUTPUT_CSV")"
+    OUTPUT_CSV_HOST_PATH="${OUTPUT_HOST_DIR}/${OUTPUT_CSV_HOST_BASE}"
+    OUTPUT_CSV_CONTAINER_PATH="/output/${OUTPUT_CSV_HOST_BASE}"
+    DOCKER_ARGS+=(-e "VISIONPILOT_OUTPUT_CSV=${OUTPUT_CSV_CONTAINER_PATH}")
+fi
+
+if [ -n "$OUTPUT_HOST_DIR" ]; then
+    DOCKER_ARGS+=(-v "${OUTPUT_HOST_DIR}:/output:rw")
 fi
 
 # Allow to modify config outside the container
 DOCKER_ARGS+=(-v "$(cd ../config && pwd)/vision_pilot.conf:/usr/share/visionpilot/config/vision_pilot.conf:ro")
 DOCKER_ARGS+=(-v "$(cd ../config && pwd)/vision_pilot_test.conf:/usr/share/visionpilot/config/vision_pilot_test.conf:ro")
-DOCKER_ARGS+=(-v "$(cd ../config && pwd)/H.yaml:/usr/share/visionpilot/config/H.yaml:ro")
+H_HOST_PATH="${CONFIG_DIR}/H.yaml"
+if [ -n "${DATA_HOST_PATH:-}" ] && [ -f "${DATA_HOST_PATH}/H.yaml" ]; then
+    H_HOST_PATH="${DATA_HOST_PATH}/H.yaml"
+fi
+DOCKER_ARGS+=(-v "${H_HOST_PATH}:/usr/share/visionpilot/config/H.yaml:ro")
 if [ "$ENABLE_ROS2" = "ON" ]; then
     DOCKER_ARGS+=(-v "$(cd ../config && pwd)/vision_pilot_ros2.conf:/usr/share/visionpilot/config/vision_pilot_ros2.conf:ro")
 fi
@@ -203,8 +241,12 @@ if [ -n "$DATA_DIR" ]; then
         echo " Data mount:   $DATA_HOST_PATH -> $DATA_CONTAINER_PATH"
     fi
 fi
+echo " H.yaml:       $H_HOST_PATH"
 if [ -n "$OUTPUT_VIDEO" ]; then
     echo " Output video: $OUTPUT_HOST_PATH -> $OUTPUT_CONTAINER_PATH"
+fi
+if [ -n "$OUTPUT_CSV" ]; then
+    echo " Output CSV:   $OUTPUT_CSV_HOST_PATH -> $OUTPUT_CSV_CONTAINER_PATH"
 fi
 echo "=================================================="
 

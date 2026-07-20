@@ -271,16 +271,21 @@ These are container paths. The host directory is mounted to `/data` by `run.sh`.
 
 ## Run Your Own Dataset
 
-Assume a new dataset has this structure:
+A VisionPilot video dataset directory should contain:
 
 ```text
-input/test_open_lane_2/
+input/<dataset_name>/
 ├── input.mp4
 ├── frame_speed.txt
-└── H.yaml              # Optional, only if provided by the dataset
+└── H.yaml              # Optional but recommended for custom camera viewpoints
 ```
 
-### 1. Upload the Dataset
+`run.sh` automatically checks the mounted dataset directory. If
+`input/<dataset_name>/H.yaml` exists, it is mounted into the container and used
+for that run. If it does not exist, the default `VisionPilot/config/H.yaml` is
+used.
+
+### 1. Upload an Existing Dataset
 
 From Windows PowerShell:
 
@@ -292,26 +297,7 @@ scp "D:\chrome\test_open_lane_2\H.yaml" user@server:~/vision_pilot/input/test_op
 
 If the dataset does not provide `H.yaml`, skip the last command.
 
-### 2. Use a Dataset-Specific H.yaml
-
-Some OpenLane samples include a dataset-specific homography file.
-
-First back up the current file:
-
-```bash
-cp ~/vision_pilot/VisionPilot/config/H.yaml ~/vision_pilot/VisionPilot/config/H.yaml.bak
-```
-
-Then copy the dataset-specific file:
-
-```bash
-cp ~/vision_pilot/input/test_open_lane_2/H.yaml ~/vision_pilot/VisionPilot/config/H.yaml
-```
-
-This fork mounts `VisionPilot/config/H.yaml` into the container at runtime, so
-changing `H.yaml` does not require rebuilding the Docker image.
-
-### 3. Run the Dataset
+### 2. Run the Dataset
 
 Keep `vision_pilot_test.conf` using container paths:
 
@@ -326,8 +312,107 @@ Then run:
 cd ~/vision_pilot/VisionPilot/docker
 sudo ./run.sh --gpu --no-display \
   --data ~/vision_pilot/input/test_open_lane_2:/data \
-  --output-video ~/vision_pilot/output/test_open_lane_2_result.mp4
+  --output-video ~/vision_pilot/output/test_open_lane_2_result.mp4 \
+  --output-csv ~/vision_pilot/output/test_open_lane_2_metrics.csv
 ```
+
+Expected outputs:
+
+```text
+output/test_open_lane_2_result.mp4
+output/test_open_lane_2_metrics.csv
+```
+
+## Custom Video Workflow
+
+This workflow is intended for a phone, action camera, or dashboard-camera style
+video. The model can run on these videos, but the result depends strongly on the
+camera viewpoint. A dataset-specific `H.yaml` is the first thing to prepare.
+
+### 1. Prepare `input.mp4` and `frame_speed.txt`
+
+If the source video is already on the server, create a dataset directory with:
+
+```bash
+cd ~/vision_pilot
+python3 tools/prepare_custom_video_dataset.py \
+  /path/to/your_video.mp4 \
+  input/custom_phone_video \
+  --speed 0.0 \
+  --overwrite
+```
+
+This creates:
+
+```text
+input/custom_phone_video/input.mp4
+input/custom_phone_video/frame_speed.txt
+```
+
+`--speed` is the ego speed in meters per second. Use `0.0` if speed is unknown.
+For better longitudinal behavior, replace `frame_speed.txt` later with per-frame
+vehicle speed values.
+
+### 2. Extract a Calibration Frame
+
+Choose a frame where lane markings or road edges are clearly visible:
+
+```bash
+python3 tools/extract_calibration_frame.py \
+  input/custom_phone_video/input.mp4 \
+  input/custom_phone_video/calibration_frame.jpg \
+  --time 2.0
+```
+
+Open `calibration_frame.jpg` and record four pixel points in this order:
+
+```text
+near-left, near-right, far-left, far-right
+```
+
+The near points should be on the left and right lane boundaries near the vehicle.
+The far points should be on the same boundaries farther ahead.
+
+### 3. Generate Dataset-Specific `H.yaml`
+
+Example:
+
+```bash
+python3 tools/generate_h_yaml_from_points.py \
+  --image-point 420,690 \
+  --image-point 880,690 \
+  --image-point 585,430 \
+  --image-point 735,430 \
+  --lane-width 3.6 \
+  --near-distance 6.0 \
+  --far-distance 30.0 \
+  --output input/custom_phone_video/H.yaml \
+  --preview-image input/custom_phone_video/calibration_frame.jpg \
+  --preview-output input/custom_phone_video/calibration_preview.jpg
+```
+
+The generated `H.yaml` maps raw image pixels to road coordinates. The preview
+image is only for checking that the selected points are in the intended order.
+
+### 4. Run the Custom Video
+
+```bash
+cd ~/vision_pilot/VisionPilot/docker
+sudo ./run.sh --gpu --no-display \
+  --data ~/vision_pilot/input/custom_phone_video:/data \
+  --output-video ~/vision_pilot/output/custom_phone_video_result.mp4 \
+  --output-csv ~/vision_pilot/output/custom_phone_video_metrics.csv
+```
+
+Useful CSV columns include:
+
+```text
+frame_id, ego_speed_ms, cte_m, yaw_rad, curvature, cipo_distance_m,
+steering_rad, acceleration_ms2, autodrive_ms, autosteer_ms, autospeed_ms
+```
+
+Use the CSV file to compare baseline and improved runs instead of judging only by
+visual inspection.
 
 ## Batch Process Multiple Datasets
 
@@ -348,13 +433,10 @@ cd ~/vision_pilot
 for name in test_open_lane_2 test_open_lane_5 test_open_lane_6 test_open_lane_10; do
   echo "Processing ${name}"
 
-  if [ -f "input/${name}/H.yaml" ]; then
-    cp "input/${name}/H.yaml" "VisionPilot/config/H.yaml"
-  fi
-
   sudo ./VisionPilot/docker/run.sh --gpu --no-display \
     --data "$PWD/input/${name}:/data" \
-    --output-video "$PWD/output/${name}_result.mp4"
+    --output-video "$PWD/output/${name}_result.mp4" \
+    --output-csv "$PWD/output/${name}_metrics.csv"
 done
 ```
 
@@ -362,9 +444,13 @@ Expected outputs:
 
 ```text
 output/test_open_lane_2_result.mp4
+output/test_open_lane_2_metrics.csv
 output/test_open_lane_5_result.mp4
+output/test_open_lane_5_metrics.csv
 output/test_open_lane_6_result.mp4
+output/test_open_lane_6_metrics.csv
 output/test_open_lane_10_result.mp4
+output/test_open_lane_10_metrics.csv
 ```
 
 ## Create a 2x2 Comparison Video
