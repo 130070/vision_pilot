@@ -7,6 +7,11 @@ on:
   schedule:
     - cron: '0 3 * * 1'
   workflow_dispatch:
+    inputs:
+      force:
+        description: '强制提交一次（用于验证写权限，忽略 30 天阈值）'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -34,7 +39,7 @@ jobs:
           LAST=${LAST:-0}
           AGE_DAYS=$(( (NOW - LAST) / 86400 ))
           echo "上次保活提交距今 ${AGE_DAYS} 天（阈值 ${THRESHOLD_DAYS} 天）"
-          if [ "$AGE_DAYS" -lt "$THRESHOLD_DAYS" ]; then
+          if [ "$AGE_DAYS" -lt "$THRESHOLD_DAYS" ] && [ "${{ inputs.force }}" != "true" ]; then
             echo "仓库近期有活动，本次跳过。"
             exit 0
           fi
