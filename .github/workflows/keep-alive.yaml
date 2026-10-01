@@ -1,0 +1,46 @@
+name: keep-alive
+
+# 目的：防止 GitHub 因仓库长期（60 天）没有提交而自动停用定时工作流。
+# 机制：每周检查一次，若超过 30 天没有任何提交活动，就更新本文件并提交一次。
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Commit activity timestamp if repository is stale
+        run: |
+          set -euo pipefail
+          FILE=".github/last-activity"
+          THRESHOLD_DAYS=30
+          NOW=$(date -u +%s)
+          LAST=$(git log -1 --format=%ct -- "$FILE" 2>/dev/null || true)
+          LAST=${LAST:-0}
+          AGE_DAYS=$(( (NOW - LAST) / 86400 ))
+          echo "上次保活提交距今 ${AGE_DAYS} 天（阈值 ${THRESHOLD_DAYS} 天）"
+          if [ "$AGE_DAYS" -lt "$THRESHOLD_DAYS" ]; then
+            echo "仓库近期有活动，本次跳过。"
+            exit 0
+          fi
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > "$FILE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$FILE"
+          git commit -m "chore: keep-alive (保持仓库活动，避免定时工作流被自动停用)"
+          git push origin "HEAD:${{ github.ref_name }}"
